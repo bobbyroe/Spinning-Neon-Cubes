@@ -1,10 +1,12 @@
 import * as THREE from "three";
-import { LineMaterial } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/lines/LineMaterial.js";
-import { Line2 } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/lines/Line2.js";
-import { LineGeometry } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/lines/LineGeometry.js";
-import { EffectComposer } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "https://cdn.jsdelivr.net/npm/three@0.131/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { LineMaterial } from "jsm/lines/LineMaterial.js";
+import { Line2 } from "jsm/lines/Line2.js";
+import { LineSegmentsGeometry } from "jsm/lines/LineSegmentsGeometry.js";
+import { EffectComposer } from "jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "jsm/postprocessing/UnrealBloomPass.js";
+import getLayer from "./getLayer.js";
+import { OrbitControls } from "jsm/controls/OrbitControls.js";
 
 const w = window.innerWidth;
 const h = window.innerHeight;
@@ -15,46 +17,45 @@ const renderer = new THREE.WebGLRenderer();
 renderer.setSize(w, h);
 document.body.appendChild(renderer.domElement);
 
+// ctrls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
 // effects
 const renderScene = new RenderPass(scene, camera);
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(w, h), 1.5, 0.4, 100);
-bloomPass.threshold = 0;
-bloomPass.strength = 1;
-bloomPass.radius = 0;
+// bloomPass.threshold = 0;
+// bloomPass.strength = 1;
+// bloomPass.radius = 0;
 const composer = new EffectComposer(renderer);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
-function getPositions() {
-  const points = [];
-  points.push(0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0); // face
-  points.push(0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1); // face
-  points.push(0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1); // the rest
-  const arr = points.map(v => v -= 0.5);
-  return arr;
-}
+const geometry = new THREE.DodecahedronGeometry();
 function getBox(index) {
-  const hue = 0.8 - index / 19;
+  const hue = 0.8 - index / 36;
   const material = new LineMaterial({
     color: new THREE.Color().setHSL(hue, 1.0, 0.5),
-    linewidth: 9,
+    linewidth: 4,
     transparent: true,
     opacity: 0.25,
     blendMode: THREE.AdditiveBlending,
   });
   material.resolution.set(w, h);
 
-  const geometry = new LineGeometry();
-  geometry.setPositions(getPositions());
-  const mesh = new Line2(geometry, material);
-  mesh.scale.setScalar(1.0 + index * 0.1);
+  const edges = new THREE.EdgesGeometry(geometry, 1);
+  const lineGeo = new LineSegmentsGeometry();
+  lineGeo.fromEdgesGeometry(edges);
+  const lines = new Line2(lineGeo, material);
+  
+  lines.scale.setScalar(1.0 + index * 0.025);
   const rotationSpeed = 0.0005;
-  const offset = 1.0 - index * 0.03;
-  mesh.update = (t) => {
-    mesh.rotation.x = Math.sin(offset + t * rotationSpeed) * 2;
-    mesh.rotation.y = Math.sin(offset + t * rotationSpeed) * 2;
+  const offset = 1.0 - index * 0.01;
+  lines.update = (t) => {
+    lines.rotation.x = Math.sin(offset + t * rotationSpeed) * 2;
+    lines.rotation.y = Math.sin(offset + t * rotationSpeed) * 2;
   }
-  return mesh;
+  return lines;
 }
 
 const boxGroup = new THREE.Group();
@@ -65,17 +66,28 @@ function addBoxes(numBoxes) {
     boxGroup.add(box);
   }
 }
-addBoxes(16);
+addBoxes(32);
 boxGroup.update = (t) => {
   boxGroup.children.forEach((box) => {
     box.update(t);
   });
 }
+const gradientBackground = getLayer({
+  hue: 0.6,
+  numSprites: 8,
+  opacity: 0.04,
+  radius: 10,
+  size: 24,
+  z: -10.5,
+});
+// scene.add(gradientBackground);
+
 function animate(timeStamp) {
   timeStamp += 0.000001;
   requestAnimationFrame(animate);
   boxGroup.update(timeStamp);
   composer.render(scene, camera);
+  controls.update();
 }
 
 animate();
